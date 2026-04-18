@@ -87,29 +87,22 @@ fun GameReelScreen(viewModel: GameViewModel) {
     
     var currentGameIndex by remember { mutableStateOf(0) }
     val games = remember {
-        mutableStateListOf(
-            GameType.COIN_FLIP,
-            GameType.HIGHER_LOWER,
-            GameType.PLINKO,
+        listOf(
             GameType.COIN_FLIP,
             GameType.HIGHER_LOWER,
             GameType.PLINKO
         )
     }
     
-    var dragOffset by remember { mutableStateOf(0f) }
-    var isTransitioning by remember { mutableStateOf(false) }
+    var dragOffsetY by remember { mutableStateOf(0f) }
     
+    val targetOffset = -currentGameIndex.toFloat()
     val animatedOffset by animateFloatAsState(
-        targetValue = -currentGameIndex.toFloat() + (if (!isTransitioning) dragOffset * 0.0015f else 0f),
-        animationSpec = if (isTransitioning) {
-            spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessMedium
-            )
-        } else {
-            tween(0)
-        },
+        targetValue = targetOffset,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
         label = "game_offset"
     )
     
@@ -136,59 +129,43 @@ fun GameReelScreen(viewModel: GameViewModel) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(Unit) {
+                .pointerInput(games.size) {
                     detectVerticalDragGestures(
                         onDragStart = {
-                            isTransitioning = false
-                            viewModel.vibrateLight()
+                            dragOffsetY = 0f
                         },
                         onDragEnd = {
-                            val threshold = 150f
-                            if (dragOffset.absoluteValue > threshold) {
-                                if (dragOffset < 0 && currentGameIndex < games.size - 1) {
-                                    currentGameIndex++
-                                    viewModel.vibrateMedium()
-                                } else if (dragOffset > 0 && currentGameIndex > 0) {
-                                    currentGameIndex--
-                                    viewModel.vibrateMedium()
-                                }
+                            val threshold = size.height * 0.2f
+                            if (dragOffsetY < -threshold && currentGameIndex < games.size - 1) {
+                                currentGameIndex++
+                                viewModel.vibrateMedium()
+                            } else if (dragOffsetY > threshold && currentGameIndex > 0) {
+                                currentGameIndex--
+                                viewModel.vibrateMedium()
                             }
-                            isTransitioning = true
-                            dragOffset = 0f
+                            dragOffsetY = 0f
                         },
                         onVerticalDrag = { _, dragAmount ->
-                            if (!isTransitioning) {
-                                dragOffset += dragAmount
-                                // Light haptic feedback during drag
-                                if (dragOffset.absoluteValue % 50 < 10) {
-                                    viewModel.vibrateLight()
-                                }
-                            }
+                            dragOffsetY += dragAmount
                         }
                     )
                 }
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        translationY = animatedOffset * size.height
-                    }
-            ) {
-                games.forEachIndexed { index, gameType ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .offset(y = (index * 100).dp)
-                    ) {
-                        if (kotlin.math.abs(index - currentGameIndex) <= 1) {
-                            GameSlide(
-                                gameType = gameType,
-                                viewModel = viewModel,
-                                balance = gameState.balance
-                            )
+            games.forEachIndexed { index, gameType ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            val offset = (index + animatedOffset) + (dragOffsetY / size.height)
+                            translationY = offset * size.height
+                            alpha = if (kotlin.math.abs(offset) < 1.5f) 1f else 0f
                         }
-                    }
+                ) {
+                    GameSlide(
+                        gameType = gameType,
+                        viewModel = viewModel,
+                        balance = gameState.balance
+                    )
                 }
             }
         }
@@ -275,7 +252,7 @@ fun GameReelScreen(viewModel: GameViewModel) {
             verticalArrangement = Arrangement.spacedBy(6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            games.take(5).forEachIndexed { index, _ ->
+            games.forEachIndexed { index, _ ->
                 val isActive = index == currentGameIndex
                 val dotHeight by animateDpAsState(
                     targetValue = if (isActive) 20.dp else 4.dp,
