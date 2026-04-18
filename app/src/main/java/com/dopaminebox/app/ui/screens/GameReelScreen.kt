@@ -94,19 +94,23 @@ fun GameReelScreen(viewModel: GameViewModel) {
         )
     }
     
-    var dragOffsetY by remember { mutableStateOf(0f) }
+    var offsetY by remember { mutableStateOf(0f) }
+    var isDragging by remember { mutableStateOf(false) }
     
-    val targetOffset = -currentGameIndex.toFloat()
-    val animatedOffset by animateFloatAsState(
-        targetValue = targetOffset,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "game_offset"
+    val animatedOffsetY by animateFloatAsState(
+        targetValue = -currentGameIndex * 1000f + offsetY,
+        animationSpec = if (isDragging) {
+            tween(0)
+        } else {
+            spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
+        },
+        label = "offset"
     )
     
-    // Balance pulse animation
+    // Balance pulse
     var balancePulse by remember { mutableStateOf(false) }
     val balanceScale by animateFloatAsState(
         targetValue = if (balancePulse) 1.15f else 1f,
@@ -125,59 +129,69 @@ fun GameReelScreen(viewModel: GameViewModel) {
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // Game content with swipe
+        // Games container
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(games.size) {
+                .pointerInput(Unit) {
                     detectVerticalDragGestures(
                         onDragStart = {
-                            dragOffsetY = 0f
+                            isDragging = true
                         },
                         onDragEnd = {
-                            val threshold = size.height * 0.2f
-                            if (dragOffsetY < -threshold && currentGameIndex < games.size - 1) {
-                                currentGameIndex++
-                                viewModel.vibrateMedium()
-                            } else if (dragOffsetY > threshold && currentGameIndex > 0) {
-                                currentGameIndex--
-                                viewModel.vibrateMedium()
+                            isDragging = false
+                            val threshold = 200f
+                            
+                            when {
+                                offsetY < -threshold && currentGameIndex < games.size - 1 -> {
+                                    currentGameIndex++
+                                    viewModel.vibrateMedium()
+                                }
+                                offsetY > threshold && currentGameIndex > 0 -> {
+                                    currentGameIndex--
+                                    viewModel.vibrateMedium()
+                                }
                             }
-                            dragOffsetY = 0f
+                            offsetY = 0f
                         },
                         onVerticalDrag = { _, dragAmount ->
-                            dragOffsetY += dragAmount
+                            offsetY += dragAmount * 0.5f
+                            offsetY = offsetY.coerceIn(-400f, 400f)
                         }
                     )
                 }
         ) {
-            games.forEachIndexed { index, gameType ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            val offset = (index + animatedOffset) + (dragOffsetY / size.height)
-                            translationY = offset * size.height
-                            alpha = if (kotlin.math.abs(offset) < 1.5f) 1f else 0f
-                        }
-                ) {
-                    GameSlide(
-                        gameType = gameType,
-                        viewModel = viewModel,
-                        balance = gameState.balance
-                    )
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        translationY = animatedOffsetY
+                    }
+            ) {
+                games.forEach { gameType ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1000.dp)
+                    ) {
+                        GameSlide(
+                            gameType = gameType,
+                            viewModel = viewModel,
+                            balance = gameState.balance
+                        )
+                    }
                 }
             }
         }
         
-        // Top stats bar with animations
+        // Top stats bar
         Row(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(top = 48.dp, end = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Balance chip with pulse
+            // Balance
             Surface(
                 modifier = Modifier
                     .clip(RoundedCornerShape(16.dp))
@@ -186,8 +200,7 @@ fun GameReelScreen(viewModel: GameViewModel) {
                         scaleY = balanceScale
                     },
                 color = Color(0xFFFFD700).copy(alpha = 0.15f),
-                tonalElevation = 4.dp,
-                shadowElevation = if (balancePulse) 8.dp else 4.dp
+                tonalElevation = 4.dp
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -204,13 +217,7 @@ fun GameReelScreen(viewModel: GameViewModel) {
                 }
             }
             
-            // Streak chip with flame animation
-            val flameScale by animateFloatAsState(
-                targetValue = if (gameState.streak > 0) 1f else 0.8f,
-                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-                label = "flame_scale"
-            )
-            
+            // Streak
             Surface(
                 modifier = Modifier.clip(RoundedCornerShape(16.dp)),
                 color = Color(0xFFFF6B6B).copy(alpha = 0.15f),
@@ -221,14 +228,7 @@ fun GameReelScreen(viewModel: GameViewModel) {
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "🔥",
-                        fontSize = 14.sp,
-                        modifier = Modifier.graphicsLayer {
-                            scaleX = flameScale
-                            scaleY = flameScale
-                        }
-                    )
+                    Text(text = "🔥", fontSize = 14.sp)
                     Text(
                         text = gameState.streak.toString(),
                         fontSize = 14.sp,
@@ -244,86 +244,36 @@ fun GameReelScreen(viewModel: GameViewModel) {
             }
         }
         
-        // Scroll indicator dots with animation
+        // Scroll dots
         Column(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .padding(end = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             games.forEachIndexed { index, _ ->
                 val isActive = index == currentGameIndex
                 val dotHeight by animateDpAsState(
-                    targetValue = if (isActive) 20.dp else 4.dp,
+                    targetValue = if (isActive) 24.dp else 6.dp,
                     animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-                    label = "dot_height"
-                )
-                val dotWidth by animateDpAsState(
-                    targetValue = if (isActive) 6.dp else 4.dp,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-                    label = "dot_width"
+                    label = "dot"
                 )
                 
                 Box(
                     modifier = Modifier
-                        .size(width = dotWidth, height = dotHeight)
-                        .clip(CircleShape)
+                        .width(6.dp)
+                        .height(dotHeight)
+                        .clip(RoundedCornerShape(3.dp))
                         .background(
                             if (isActive) Color.White
                             else Color.White.copy(alpha = 0.3f)
                         )
                         .clickable {
-                            if (index != currentGameIndex) {
-                                currentGameIndex = index
-                                isTransitioning = true
-                                viewModel.vibrateMedium()
-                            }
+                            currentGameIndex = index
+                            viewModel.vibrateMedium()
                         }
                 )
-            }
-        }
-        
-        // Swipe hint with bounce animation
-        val hintAlpha by animateFloatAsState(
-            targetValue = if (currentGameIndex == 0) 0.5f else 0f,
-            animationSpec = tween(500),
-            label = "hint_alpha"
-        )
-        
-        if (hintAlpha > 0) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 120.dp)
-                    .graphicsLayer { alpha = hintAlpha }
-            ) {
-                val infiniteTransition = rememberInfiniteTransition(label = "hint")
-                val hintOffset by infiniteTransition.animateFloat(
-                    initialValue = 0f,
-                    targetValue = -10f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(1000, easing = FastOutSlowInEasing),
-                        repeatMode = RepeatMode.Reverse
-                    ),
-                    label = "hint_offset"
-                )
-                
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.offset(y = hintOffset.dp)
-                ) {
-                    Text(
-                        text = "swipe up for next game",
-                        fontSize = 12.sp,
-                        color = Color.White.copy(alpha = 0.5f)
-                    )
-                    Text(
-                        text = "↑",
-                        fontSize = 20.sp,
-                        color = Color.White.copy(alpha = 0.4f)
-                    )
-                }
             }
         }
     }
@@ -337,88 +287,74 @@ fun GameSlide(
 ) {
     val meta = GAME_METADATA[gameType]!!
     
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF080810))
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize()
+        // Game header
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(meta.gradient)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            // Game header
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = Color.Transparent
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .background(meta.gradient)
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(meta.color.copy(alpha = 0.22f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Surface(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(16.dp)),
-                            color = meta.color.copy(alpha = 0.22f),
-                            tonalElevation = 2.dp
-                        ) {
-                            Box(
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(text = meta.emoji, fontSize = 20.sp)
-                            }
-                        }
-                        
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = meta.label,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Black,
-                                color = Color.White
-                            )
-                            Text(
-                                text = meta.sub,
-                                fontSize = 12.sp,
-                                color = Color.White.copy(alpha = 0.4f)
-                            )
-                        }
-                        
-                        Surface(
-                            modifier = Modifier.clip(RoundedCornerShape(12.dp)),
-                            color = meta.color.copy(alpha = 0.22f),
-                            tonalElevation = 2.dp
-                        ) {
-                            Text(
-                                text = "LIVE",
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = meta.color
-                            )
-                        }
-                    }
+                    Text(text = meta.emoji, fontSize = 20.sp)
+                }
+                
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = meta.label,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White
+                    )
+                    Text(
+                        text = meta.sub,
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.4f)
+                    )
+                }
+                
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(meta.color.copy(alpha = 0.22f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "LIVE",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = meta.color
+                    )
                 }
             }
-            
-            // Game content - fills remaining space
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                when (gameType) {
-                    GameType.COIN_FLIP -> CoinFlipGame(viewModel = viewModel, balance = balance)
-                    GameType.HIGHER_LOWER -> HigherLowerGame(viewModel = viewModel, balance = balance)
-                    GameType.PLINKO -> PlinkoGame(viewModel = viewModel, balance = balance)
-                }
+        }
+        
+        // Game content
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(bottom = 100.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            when (gameType) {
+                GameType.COIN_FLIP -> CoinFlipGame(viewModel = viewModel, balance = balance)
+                GameType.HIGHER_LOWER -> HigherLowerGame(viewModel = viewModel, balance = balance)
+                GameType.PLINKO -> PlinkoGame(viewModel = viewModel, balance = balance)
             }
         }
     }
