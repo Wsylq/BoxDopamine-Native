@@ -25,29 +25,25 @@ jobs:
       uses: android-actions/setup-android@v3
       
     - name: Grant execute permission for gradlew
-      run: chmod +x android-native/gradlew
+      run: chmod +x gradlew
       
     - name: Build Debug APK
-      run: |
-        cd android-native
-        ./gradlew assembleDebug --stacktrace
+      run: ./gradlew assembleDebug --stacktrace
         
     - name: Build Release APK
-      run: |
-        cd android-native
-        ./gradlew assembleRelease --stacktrace
+      run: ./gradlew assembleRelease --stacktrace
       continue-on-error: true
         
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
       with:
         name: app-debug
-        path: android-native/app/build/outputs/apk/debug/app-debug.apk
+        path: app/build/outputs/apk/debug/app-debug.apk
         
     - name: Upload Release APK
       uses: actions/upload-artifact@v4
       if: success()
       with:
         name: app-release
-        path: android-native/app/build/outputs/apk/release/app-release-unsigned.apk
+        path: app/build/outputs/apk/release/app-release-unsigned.apk
       continue-on-error: true
