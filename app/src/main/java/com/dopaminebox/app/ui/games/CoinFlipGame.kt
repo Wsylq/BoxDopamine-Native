@@ -141,12 +141,28 @@ fun CoinFlipGame(viewModel: GameViewModel, balance: Int) {
         // Result text
         AnimatedContent(
             targetState = phase,
-            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            transitionSpec = {
+                fadeIn() + scaleIn(initialScale = 0.8f) togetherWith
+                        fadeOut() + scaleOut(targetScale = 0.8f)
+            },
             label = "result_text"
         ) { currentPhase ->
             when (currentPhase) {
                 CoinPhase.RESULT -> {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    val shakeOffset by animateFloatAsState(
+                        targetValue = if (won == false) {
+                            listOf(-5f, 5f, -5f, 5f, 0f).random()
+                        } else 0f,
+                        animationSpec = tween(50),
+                        label = "shake"
+                    )
+                    
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.graphicsLayer {
+                            translationX = shakeOffset
+                        }
+                    ) {
                         Text(
                             text = if (won == true) "🎉 YOU WIN!" else "💀 YOU LOSE",
                             fontSize = 28.sp,
@@ -184,6 +200,13 @@ fun CoinFlipGame(viewModel: GameViewModel, balance: Int) {
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             listOf(CoinSide.HEADS to "👑 Heads", CoinSide.TAILS to "🦅 Tails").forEach { (side, label) ->
+                val isSelected = choice == side
+                val buttonScale by animateFloatAsState(
+                    targetValue = if (isSelected) 1.05f else 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                    label = "button_scale"
+                )
+                
                 Button(
                     onClick = {
                         choice = side
@@ -191,9 +214,13 @@ fun CoinFlipGame(viewModel: GameViewModel, balance: Int) {
                     },
                     modifier = Modifier
                         .weight(1f)
-                        .height(48.dp),
+                        .height(48.dp)
+                        .graphicsLayer {
+                            scaleX = buttonScale
+                            scaleY = buttonScale
+                        },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (choice == side) {
+                        containerColor = if (isSelected) {
                             if (side == CoinSide.HEADS) Color(0xFFFFD700) else Color(0xFFC0C0C0)
                         } else {
                             Color.White.copy(alpha = 0.08f)
@@ -205,7 +232,7 @@ fun CoinFlipGame(viewModel: GameViewModel, balance: Int) {
                         text = label,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (choice == side) Color.Black else Color.White
+                        color = if (isSelected) Color.Black else Color.White
                     )
                 }
             }
@@ -233,8 +260,15 @@ fun CoinFlipGame(viewModel: GameViewModel, balance: Int) {
                         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
                     ) {
                         row.forEach { b ->
+                            val isSelected = bet == b
+                            val chipScale by animateFloatAsState(
+                                targetValue = if (isSelected) 1.1f else 1f,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                                label = "chip_scale"
+                            )
+                            
                             FilterChip(
-                                selected = bet == b,
+                                selected = isSelected,
                                 onClick = {
                                     bet = b
                                     viewModel.vibrateLight()
@@ -245,6 +279,10 @@ fun CoinFlipGame(viewModel: GameViewModel, balance: Int) {
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold
                                     )
+                                },
+                                modifier = Modifier.graphicsLayer {
+                                    scaleX = chipScale
+                                    scaleY = chipScale
                                 },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = Color(0xFFFFD700).copy(alpha = 0.2f),
