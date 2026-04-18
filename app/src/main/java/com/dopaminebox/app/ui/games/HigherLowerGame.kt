@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.sp
 import com.dopaminebox.app.data.formatCurrency
 import com.dopaminebox.app.viewmodel.GameViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.min
 import kotlin.random.Random
 
@@ -46,6 +47,7 @@ fun HigherLowerGame(viewModel: GameViewModel, balance: Int) {
     var streak by remember { mutableStateOf(0) }
     var pot by remember { mutableStateOf(0) }
     var showNext by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     
     val currentPot = if (streak == 0) min(bet, balance) else pot
     
@@ -68,7 +70,7 @@ fun HigherLowerGame(viewModel: GameViewModel, balance: Int) {
         showNext = true
         viewModel.vibrateMedium()
         
-        LaunchedEffect(Unit) {
+        scope.launch {
             delay(800)
             val correct = if (dir == "higher") next.num >= currentCard.num else next.num <= currentCard.num
             

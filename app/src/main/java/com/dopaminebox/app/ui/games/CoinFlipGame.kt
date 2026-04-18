@@ -123,7 +123,7 @@ fun CoinFlipGame(viewModel: GameViewModel, balance: Int) {
             }
             
             // Win/Loss indicator
-            AnimatedVisibility(
+            androidx.compose.animation.AnimatedVisibility(
                 visible = phase == CoinPhase.RESULT && won != null,
                 enter = fadeIn() + slideInVertically { -it },
                 exit = fadeOut()
